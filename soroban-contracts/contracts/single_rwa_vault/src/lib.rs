@@ -177,6 +177,8 @@ impl SingleRWAVault {
     pub fn mint(e: &Env, caller: Address, shares: i128, receiver: Address) -> i128 {
         caller.require_auth();
         require_not_paused(e);
+        require_not_blacklisted(e, &caller);
+        require_not_blacklisted(e, &receiver);
         require_kyc_verified(e, &caller);
         require_active_or_funding(e);
 
