@@ -66,10 +66,11 @@ pub enum DataKey {
     // --- Vault state ---
     VaultState,
     Paused,
-    Locked,
     ActivationTimestamp,
     /// Reentrancy lock — true while a guarded function is executing.
     Locked,
+    /// Unix timestamp deadline for funding; 0 means no deadline.
+    FundingDeadline,
 
     // --- Epoch / yield ---
     CurrentEpoch,
@@ -181,6 +182,17 @@ instance_get!(get_funding_target, FundingTarget, i128);
 instance_put!(put_funding_target, FundingTarget, i128);
 instance_get!(get_maturity_date, MaturityDate, u64);
 instance_put!(put_maturity_date, MaturityDate, u64);
+
+pub fn get_funding_deadline(e: &Env) -> u64 {
+    e.storage()
+        .instance()
+        .get(&DataKey::FundingDeadline)
+        .unwrap_or(0)
+}
+pub fn put_funding_deadline(e: &Env, val: u64) {
+    e.storage().instance().set(&DataKey::FundingDeadline, &val);
+}
+
 instance_get!(get_min_deposit, MinDeposit, i128);
 instance_put!(put_min_deposit, MinDeposit, i128);
 instance_get!(get_max_deposit_per_user, MaxDepositPerUser, i128);

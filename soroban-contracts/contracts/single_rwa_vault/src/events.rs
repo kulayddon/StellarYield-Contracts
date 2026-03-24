@@ -6,13 +6,6 @@ use soroban_sdk::{symbol_short, Address, Env, String};
 
 use crate::types::VaultState;
 
-pub fn emit_address_blacklisted(e: &Env, address: Address, status: bool) {
-    e.events().publish(
-        (symbol_short!("blacklist"),),
-        (address, status),
-    );
-}
-
 pub fn emit_zkme_verifier_updated(e: &Env, old: Address, new: Address) {
     e.events().publish(
         (symbol_short!("zkme_upd"),),
@@ -207,5 +200,21 @@ pub fn emit_address_blacklisted(e: &Env, address: Address, status: bool) {
     e.events().publish(
         (symbol_short!("blacklist"), address),
         status,
+    );
+}
+
+/// Emitted by `cancel_funding` — vault moved to Cancelled state.
+pub fn emit_funding_cancelled(e: &Env) {
+    e.events().publish(
+        (symbol_short!("fund_cxl"),),
+        e.ledger().timestamp(),
+    );
+}
+
+/// Emitted by `refund` — user burned shares and received deposited assets back.
+pub fn emit_refunded(e: &Env, user: Address, amount: i128) {
+    e.events().publish(
+        (symbol_short!("refunded"), user),
+        amount,
     );
 }

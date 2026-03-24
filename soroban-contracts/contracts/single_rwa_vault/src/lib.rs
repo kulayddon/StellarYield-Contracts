@@ -6,6 +6,9 @@ mod storage;
 mod token_interface;
 mod types;
 
+#[cfg(test)]
+mod test_funding_deadline;
+
 pub use crate::types::*;
 
 use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Env, String};
@@ -59,6 +62,7 @@ impl SingleRWAVault {
         // Vault configuration
         put_funding_target(e, params.funding_target);
         put_maturity_date(e, params.maturity_date);
+        put_funding_deadline(e, params.funding_deadline);
         put_min_deposit(e, params.min_deposit);
         put_max_deposit_per_user(e, params.max_deposit_per_user);
         put_early_redemption_fee_bps(e, params.early_redemption_fee_bps);
@@ -488,11 +492,17 @@ impl SingleRWAVault {
         get_vault_state(e)
     }
 
-    /// Transition Funding → Active.  Requires funding target to be met.
+    /// Transition Funding → Active.  Requires funding target to be met and
+    /// the funding deadline must not have passed.
     pub fn activate_vault(e: &Env, caller: Address) {
         caller.require_auth();
         require_operator(e, &caller);
         require_state(e, VaultState::Funding);
+        // Cannot activate once the funding deadline has passed.
+        let deadline = get_funding_deadline(e);
+        if deadline > 0 && e.ledger().timestamp() > deadline {
+            panic_with_error!(e, Error::FundingDeadlinePassed);
+        }
         if !Self::is_funding_target_met(e) {
             panic_with_error!(e, Error::FundingTargetNotMet);
         }
@@ -500,6 +510,71 @@ impl SingleRWAVault {
         put_activation_timestamp(e, e.ledger().timestamp());
         emit_vault_state_changed(e, VaultState::Funding, VaultState::Active);
         bump_instance(e);
+    }
+
+    /// Cancel a failed funding round.
+    ///
+    /// Operator-only.  Callable only when the vault is in Funding state,
+    /// the funding deadline has passed, and the funding target has not been met.
+    /// Transitions the vault to Cancelled, enabling individual `refund` calls.
+    pub fn cancel_funding(e: &Env, caller: Address) {
+        caller.require_auth();
+        require_operator(e, &caller);
+        require_state(e, VaultState::Funding);
+        // Deadline must have passed.
+        let deadline = get_funding_deadline(e);
+        if deadline == 0 || e.ledger().timestamp() <= deadline {
+            panic_with_error!(e, Error::FundingDeadlineNotPassed);
+        }
+        // Funding target must still be unmet.
+        if Self::is_funding_target_met(e) {
+            panic_with_error!(e, Error::FundingTargetNotMet);
+        }
+        put_vault_state(e, VaultState::Cancelled);
+        emit_vault_state_changed(e, VaultState::Funding, VaultState::Cancelled);
+        emit_funding_cancelled(e);
+        bump_instance(e);
+    }
+
+    /// Refund a depositor after a cancelled funding round.
+    ///
+    /// Burns the caller's shares 1:1 and returns the corresponding deposited
+    /// assets.  Only callable when the vault is in Cancelled state.
+    ///
+    /// Security: follows CEI — shares are burned (Effect) before the asset
+    /// transfer (Interaction).  Reentrancy lock prevents double-refund.
+    pub fn refund(e: &Env, caller: Address) -> i128 {
+        caller.require_auth();
+        // --- Checks ---
+        acquire_lock(e);
+        require_not_paused(e);
+        require_state(e, VaultState::Cancelled);
+
+        let shares = get_share_balance(e, &caller);
+        if shares <= 0 {
+            panic_with_error!(e, Error::NoSharesToRefund);
+        }
+
+        // In Funding state no yield accrues, so the share price is always 1:1.
+        // preview_redeem handles this correctly (totalAssets == totalSupply).
+        let amount = preview_redeem(e, shares);
+
+        // --- Effects ---
+        put_user_deposited(e, &caller, 0);
+        _burn(e, &caller, shares);
+
+        // --- Interaction ---
+        transfer_asset_from_vault(e, &caller, amount);
+
+        emit_refunded(e, caller, amount);
+        bump_instance(e);
+        release_lock(e);
+        amount
+    }
+
+    /// Returns the funding deadline timestamp (0 = no deadline configured).
+    pub fn funding_deadline(e: &Env) -> u64 {
+        get_funding_deadline(e)
     }
 
     /// Transition Active → Matured.  Requires block timestamp ≥ maturityDate.
@@ -1201,6 +1276,7 @@ mod test {
             cooperator: admin.clone(),
             funding_target: 1000_0000000,
             maturity_date: 0,
+            funding_deadline: 0,
             min_deposit: 1_0000000,
             max_deposit_per_user: 0,
             early_redemption_fee_bps: 100,

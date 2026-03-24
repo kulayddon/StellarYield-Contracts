@@ -21,4 +21,10 @@ pub enum Error {
     AddressBlacklisted      = 14,
     /// Reentrancy detected — a guarded function was called while already executing.
     Reentrant               = 15,
+    /// Funding deadline has already passed; cannot activate vault.
+    FundingDeadlinePassed   = 16,
+    /// Funding deadline has not yet passed; cannot cancel funding early.
+    FundingDeadlineNotPassed = 17,
+    /// Caller holds no shares to refund.
+    NoSharesToRefund        = 18,
 }
