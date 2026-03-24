@@ -8,4 +8,6 @@ pub enum Error {
     VaultAlreadyExists = 1,
     VaultNotFound      = 2,
     NotAuthorized      = 3,
+    /// Vault must be set inactive before it can be removed.
+    VaultIsActive      = 4,
 }

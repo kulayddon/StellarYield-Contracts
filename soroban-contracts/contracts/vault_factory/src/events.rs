@@ -49,3 +49,11 @@ pub fn emit_defaults_updated(
         (asset, zkme_verifier, cooperator),
     );
 }
+
+/// Emitted when an inactive vault is removed from the factory registry.
+pub fn emit_vault_removed(e: &Env, vault: Address, removed_by: Address) {
+    e.events().publish(
+        (symbol_short!("v_remove"), vault),
+        removed_by,
+    );
+}

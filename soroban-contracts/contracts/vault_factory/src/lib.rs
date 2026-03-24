@@ -6,6 +6,9 @@ mod types;
 mod events;
 mod errors;
 
+#[cfg(test)]
+mod tests;
+
 pub use crate::types::*;
 
 use soroban_sdk::{
@@ -167,6 +170,42 @@ impl VaultFactory {
     // ─────────────────────────────────────────────────────────────────
     // Vault management
     // ─────────────────────────────────────────────────────────────────
+
+    /// Remove an inactive vault from the factory registry.
+    ///
+    /// - Caller must be the admin.
+    /// - Vault must be registered.
+    /// - Vault must be inactive (set via `set_vault_status`); active vaults
+    ///   cannot be removed to protect depositors.
+    ///
+    /// On success the vault is purged from both `AllVaults` and
+    /// `SingleRwaVaults` (if present) and its `VaultInfo` entry is deleted.
+    /// A `VaultRemoved` event is emitted.
+    pub fn remove_vault(e: &Env, caller: Address, vault: Address) {
+        caller.require_auth();
+        require_admin(e, &caller);
+
+        // Vault must exist
+        let info = get_vault_info(e, &vault)
+            .unwrap_or_else(|| panic_not_found(e));
+
+        // Guard: only inactive vaults may be removed
+        if info.active {
+            panic_with_error!(e, Error::VaultIsActive);
+        }
+
+        // Remove from both registry lists
+        remove_from_all_vaults(e, &vault);
+        if info.vault_type == VaultType::SingleRwa {
+            remove_from_single_rwa_vaults(e, &vault);
+        }
+
+        // Delete persistent VaultInfo entry
+        delete_vault_info(e, &vault);
+
+        emit_vault_removed(e, vault, caller);
+        bump_instance(e);
+    }
 
     pub fn set_vault_status(e: &Env, caller: Address, vault: Address, active: bool) {
         caller.require_auth();

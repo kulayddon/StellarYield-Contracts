@@ -180,3 +180,40 @@ pub fn put_vault_info(e: &Env, vault: &Address, info: VaultInfo) {
     e.storage().persistent().set(&key, &info);
     bump_persist(e, &key);
 }
+
+/// Remove a vault address from the AllVaults list.
+pub fn remove_from_all_vaults(e: &Env, vault: &Address) {
+    let vaults = get_all_vaults(e);
+    let mut updated: Vec<Address> = Vec::new(e);
+    for i in 0..vaults.len() {
+        let addr = vaults.get(i).unwrap();
+        if addr != *vault {
+            updated.push_back(addr);
+        }
+    }
+    e.storage().persistent().set(&DataKey::AllVaults, &updated);
+    bump_persist(e, &DataKey::AllVaults);
+}
+
+/// Remove a vault address from the SingleRwaVaults list.
+pub fn remove_from_single_rwa_vaults(e: &Env, vault: &Address) {
+    let vaults = get_single_rwa_vaults(e);
+    let mut updated: Vec<Address> = Vec::new(e);
+    for i in 0..vaults.len() {
+        let addr = vaults.get(i).unwrap();
+        if addr != *vault {
+            updated.push_back(addr);
+        }
+    }
+    e.storage()
+        .persistent()
+        .set(&DataKey::SingleRwaVaults, &updated);
+    bump_persist(e, &DataKey::SingleRwaVaults);
+}
+
+/// Delete the persistent VaultInfo entry for the given vault address.
+pub fn delete_vault_info(e: &Env, vault: &Address) {
+    e.storage()
+        .persistent()
+        .remove(&DataKey::VaultInfo(vault.clone()));
+}
