@@ -8,6 +8,8 @@ mod errors;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod test;
 
 pub use crate::types::*;
 
