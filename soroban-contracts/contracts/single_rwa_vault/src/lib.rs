@@ -10,6 +10,8 @@ mod types;
 mod test_funding_deadline;
 #[cfg(test)]
 mod test_lifecycle;
+#[cfg(test)]
+mod fuzz_tests;
 
 pub use crate::types::*;
 
