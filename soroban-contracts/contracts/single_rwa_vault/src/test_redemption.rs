@@ -278,9 +278,9 @@ fn test_set_early_redemption_fee() {
     assert_eq!(vault.early_redemption_fee_bps(), 0u32);
 }
 
-/// Setting early redemption fee above 1000 bps (10%) must panic.
+/// Setting early redemption fee above 1000 bps (10%) must panic with Error::FeeTooHigh (22).
 #[test]
-#[should_panic(expected = "fee too high")]
+#[should_panic(expected = "Error(Contract, #22)")]
 fn test_set_early_redemption_fee_too_high_panics() {
     let env = Env::default();
     env.mock_all_auths();

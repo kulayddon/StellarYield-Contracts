@@ -161,13 +161,13 @@ impl VaultFactory {
 
     /// Aggregator vault is not supported (mirrors the Solidity version).
     pub fn create_aggregator_vault(
-        _e: &Env,
+        e: &Env,
         _caller: Address,
         _asset: Address,
         _name: String,
         _symbol: String,
     ) -> Address {
-        panic!("Aggregator vault not supported");
+        panic_with_error!(e, Error::NotSupported);
     }
 
     // ─────────────────────────────────────────────────────────────────

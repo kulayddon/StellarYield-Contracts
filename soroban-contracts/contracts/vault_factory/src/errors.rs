@@ -10,4 +10,6 @@ pub enum Error {
     NotAuthorized      = 3,
     /// Vault must be set inactive before it can be removed.
     VaultIsActive      = 4,
+    /// Requested operation is not supported.
+    NotSupported       = 5,
 }

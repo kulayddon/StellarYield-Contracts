@@ -1,13 +1,12 @@
 extern crate std;
 
 use soroban_sdk::{
-    testutils::Address as _,
-    Address, BytesN, Env, String,
+    testutils::{Address as _, Events as _},
+    Address, BytesN, Env, IntoVal, String,
 };
 
 use crate::{
-    errors::Error,
-    storage::{delete_vault_info, get_all_vaults, get_single_rwa_vaults, get_vault_info,
+    storage::{get_all_vaults, get_single_rwa_vaults, get_vault_info,
               push_all_vaults, push_single_rwa_vaults, put_vault_info},
     types::{VaultInfo, VaultType},
     VaultFactory, VaultFactoryClient,
@@ -189,8 +188,7 @@ fn test_remove_vault_emits_event() {
     let (contract, topics, _data) = last;
     assert_eq!(contract, factory_id);
     // Verify the first topic is the "v_remove" symbol
-    let first_topic: soroban_sdk::Val = topics.get(0).unwrap();
-    let expected: soroban_sdk::Val =
-        soroban_sdk::symbol_short!("v_remove").into_val(&e);
+    let first_topic: soroban_sdk::Symbol = topics.get(0).unwrap().into_val(&e);
+    let expected = soroban_sdk::symbol_short!("v_remove");
     assert_eq!(first_topic, expected);
 }

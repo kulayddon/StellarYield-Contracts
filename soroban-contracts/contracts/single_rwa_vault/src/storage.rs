@@ -12,8 +12,9 @@
 //! INSTANCE_BUMP_AMOUNT  ≈ 30 days
 //! BALANCE_BUMP_AMOUNT   ≈ 60 days
 
-use soroban_sdk::{contracttype, Address, Env, String};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, String};
 
+use crate::errors::Error;
 use crate::types::{RedemptionRequest, VaultState};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,7 +509,7 @@ pub fn get_redemption_request(e: &Env, id: u32) -> RedemptionRequest {
     e.storage()
         .persistent()
         .get(&DataKey::RedemptionRequest(id))
-        .unwrap_or_else(|| panic!("invalid request"))
+        .unwrap_or_else(|| panic_with_error!(e, Error::InvalidRedemptionRequest))
 }
 pub fn put_redemption_request(e: &Env, id: u32, req: RedemptionRequest) {
     e.storage()

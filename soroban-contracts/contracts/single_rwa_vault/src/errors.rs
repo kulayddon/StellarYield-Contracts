@@ -37,4 +37,8 @@ pub enum Error {
     FeeTooHigh = 22,
     /// Price aggregator is not supported or not recognised.
     AggregatorNotSupported = 23,
+    /// The specified redemption request ID is invalid or not found.
+    InvalidRedemptionRequest = 24,
+    /// Operation or component is not supported.
+    NotSupported = 25,
 }

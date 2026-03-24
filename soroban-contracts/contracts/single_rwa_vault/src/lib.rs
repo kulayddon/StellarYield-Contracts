@@ -268,7 +268,7 @@ impl SingleRWAVault {
             let allowance = get_share_allowance(e, &owner, &caller);
             let shares_needed = preview_withdraw(e, assets);
             if allowance < shares_needed {
-                panic!("insufficient allowance");
+                panic_with_error!(e, Error::InsufficientAllowance);
             }
             // --- Effects ---
             put_share_allowance(e, &owner, &caller, allowance - shares_needed);
@@ -313,7 +313,7 @@ impl SingleRWAVault {
         if caller != owner {
             let allowance = get_share_allowance(e, &owner, &caller);
             if allowance < shares {
-                panic!("insufficient allowance");
+                panic_with_error!(e, Error::InsufficientAllowance);
             }
             // --- Effects ---
             put_share_allowance(e, &owner, &caller, allowance - shares);
@@ -749,7 +749,7 @@ impl SingleRWAVault {
         if caller != owner {
             let allowance = get_share_allowance(e, &owner, &caller);
             if allowance < shares {
-                panic!("insufficient allowance");
+                panic_with_error!(e, Error::InsufficientAllowance);
             }
             // --- Effects ---
             put_share_allowance(e, &owner, &caller, allowance - shares);
@@ -793,7 +793,7 @@ impl SingleRWAVault {
             panic_with_error!(e, Error::ZeroAmount);
         }
         if get_share_balance(e, &caller) < shares {
-            panic!("insufficient shares");
+            panic_with_error!(e, Error::InsufficientBalance);
         }
 
         let id = get_redemption_counter(e) + 1;
@@ -824,7 +824,7 @@ impl SingleRWAVault {
 
         let mut req = get_redemption_request(e, request_id);
         if req.processed {
-            panic!("already processed");
+            panic_with_error!(e, Error::AlreadyProcessed);
         }
 
         // --- Effects ---
@@ -855,7 +855,7 @@ impl SingleRWAVault {
         caller.require_auth();
         require_operator(e, &caller);
         if fee_bps > 1000 {
-            panic!("fee too high");
+            panic_with_error!(e, Error::FeeTooHigh);
         }
         put_early_redemption_fee_bps(e, fee_bps);
         emit_early_redemption_fee_set(e, fee_bps);
@@ -1085,7 +1085,7 @@ impl SingleRWAVault {
         update_user_snapshot(e, &to);
         let allowance = get_share_allowance(e, &from, &spender);
         if allowance < amount {
-            panic!("insufficient allowance");
+            panic_with_error!(e, Error::InsufficientAllowance);
         }
         put_share_allowance(e, &from, &spender, allowance - amount);
         spend_share_balance(e, &from, amount);
@@ -1105,7 +1105,7 @@ impl SingleRWAVault {
         spender.require_auth();
         let allowance = get_share_allowance(e, &from, &spender);
         if allowance < amount {
-            panic!("insufficient allowance");
+            panic_with_error!(e, Error::InsufficientAllowance);
         }
         put_share_allowance(e, &from, &spender, allowance - amount);
         _burn(e, &from, amount);
@@ -1203,7 +1203,7 @@ fn _mint(e: &Env, to: &Address, amount: i128) {
 fn _burn(e: &Env, from: &Address, amount: i128) {
     let bal = get_share_balance(e, from);
     if bal < amount {
-        panic!("insufficient balance");
+        panic_with_error!(e, Error::InsufficientBalance);
     }
     put_share_balance(e, from, bal - amount);
     put_total_supply(e, get_total_supply(e) - amount);
@@ -1213,7 +1213,7 @@ fn _burn(e: &Env, from: &Address, amount: i128) {
 fn spend_share_balance(e: &Env, from: &Address, amount: i128) {
     let bal = get_share_balance(e, from);
     if bal < amount {
-        panic!("insufficient balance");
+        panic_with_error!(e, Error::InsufficientBalance);
     }
     put_share_balance(e, from, bal - amount);
     bump_balance(e, from);
