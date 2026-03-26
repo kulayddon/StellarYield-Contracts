@@ -19,5 +19,5 @@ pub enum Error {
     /// Provided WASM hash is invalid (e.g. all-zeros).
     InvalidWasmHash = 8,
     /// Storage schema version is outdated; migrate() must be called.
-    MigrationRequired = 8,
+    MigrationRequired = 9,
 }

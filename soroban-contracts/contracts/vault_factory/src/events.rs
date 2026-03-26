@@ -48,6 +48,8 @@ pub fn emit_vault_removed(e: &Env, vault: Address, removed_by: Address) {
 pub fn emit_wasm_hash_updated(e: &Env, new_hash: BytesN<32>, updated_by: Address) {
     e.events()
         .publish((symbol_short!("wasm_upd"),), (new_hash, updated_by));
+}
+
 /// Emitted when the admin grants a role to an address.
 pub fn emit_role_granted(e: &Env, addr: Address, role: Role) {
     e.events().publish((symbol_short!("role_grt"), addr), role);

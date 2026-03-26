@@ -118,9 +118,7 @@ fn test_get_user_yield_history() {
     distribute(&ctx, 10_000);
     distribute(&ctx, 20_000);
 
-    let history = ctx
-        .vault()
-        .get_user_yield_history(&ctx.user, &1u32, &2u32);
+    let history = ctx.vault().get_user_yield_history(&ctx.user, &1u32, &2u32);
     assert_eq!(history.len(), 2);
 
     let h0 = history.get(0).unwrap();
@@ -144,9 +142,7 @@ fn test_get_user_yield_history_after_claim() {
     // Claim epoch 1 only
     ctx.vault().claim_yield_for_epoch(&ctx.user, &1u32);
 
-    let history = ctx
-        .vault()
-        .get_user_yield_history(&ctx.user, &1u32, &2u32);
+    let history = ctx.vault().get_user_yield_history(&ctx.user, &1u32, &2u32);
     assert!(history.get(0).unwrap().claimed);
     assert!(!history.get(1).unwrap().claimed);
 }

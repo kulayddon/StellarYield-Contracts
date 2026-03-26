@@ -48,8 +48,7 @@ fn test_burn_from_snapshots_before_balance_change() {
     let spender = <soroban_sdk::Address as soroban_sdk::testutils::Address>::generate(&ctx.env);
     ctx.vault()
         .approve(&ctx.user, &spender, &500_000i128, &1000u32);
-    ctx.vault()
-        .burn_from(&spender, &ctx.user, &500_000i128);
+    ctx.vault().burn_from(&spender, &ctx.user, &500_000i128);
 
     let pending = ctx.vault().pending_yield_for_epoch(&ctx.user, &1u32);
     assert_eq!(pending, 100_000, "yield should use pre-burn share count");

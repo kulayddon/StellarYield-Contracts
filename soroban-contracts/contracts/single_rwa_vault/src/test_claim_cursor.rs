@@ -21,8 +21,18 @@ const FUNDING_TARGET: i128 = 100_000_000;
 fn activated_ctx(extra_yield_budget: i128) -> crate::test_helpers::TestContext {
     let ctx = setup_with_kyc_bypass();
     // Must deposit >= FUNDING_TARGET to be able to activate.
-    mint_usdc(&ctx.env, &ctx.asset_id, &ctx.user, FUNDING_TARGET + extra_yield_budget);
-    mint_usdc(&ctx.env, &ctx.asset_id, &ctx.operator, extra_yield_budget * 20);
+    mint_usdc(
+        &ctx.env,
+        &ctx.asset_id,
+        &ctx.user,
+        FUNDING_TARGET + extra_yield_budget,
+    );
+    mint_usdc(
+        &ctx.env,
+        &ctx.asset_id,
+        &ctx.operator,
+        extra_yield_budget * 20,
+    );
     ctx.vault().deposit(&ctx.user, &FUNDING_TARGET, &ctx.user);
     ctx.vault().activate_vault(&ctx.operator);
     ctx

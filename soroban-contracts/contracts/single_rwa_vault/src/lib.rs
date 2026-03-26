@@ -11,19 +11,19 @@ mod types;
 #[cfg(test)]
 mod fuzz_tests;
 #[cfg(test)]
+mod test_burn_snapshot;
+#[cfg(test)]
 mod test_burn_yield_accounting;
 #[cfg(test)]
+mod test_claim_cursor;
+#[cfg(test)]
 mod test_convert_erc4626;
+#[cfg(test)]
+mod test_epoch_history;
 #[cfg(test)]
 mod test_funding_deadline;
 #[cfg(test)]
 mod test_lifecycle;
-#[cfg(test)]
-mod test_epoch_history;
-#[cfg(test)]
-mod test_burn_snapshot;
-#[cfg(test)]
-mod test_claim_cursor;
 
 pub use crate::types::*;
 
@@ -685,7 +685,7 @@ impl SingleRWAVault {
         // the cursor, walk forward over any already-claimed epochs too.
         let mut cursor = get_last_claimed_epoch(e, &caller);
         let current = get_current_epoch(e);
-        while cursor + 1 <= current && get_has_claimed_epoch(e, &caller, cursor + 1) {
+        while cursor < current && get_has_claimed_epoch(e, &caller, cursor + 1) {
             cursor += 1;
         }
         put_last_claimed_epoch(e, &caller, cursor);
@@ -1694,14 +1694,8 @@ impl SingleRWAVault {
 
     pub fn burn(e: &Env, from: Address, amount: i128) {
         from.require_auth();
+        // Snapshot before balance change so epoch yield is attributed to pre-burn shares.
         update_user_snapshot(e, &from);
-        // --- Effects ---
-        // Snapshot user and auto-claim pending yield to prevent accounting loss
-        update_user_snapshot(e, &from);
-        let pending = Self::pending_yield(e, from.clone());
-        if pending > 0 {
-            claim_yield_no_auth(e, &from);
-        }
         _burn(e, &from, amount);
         emit_burn(e, from, amount);
         bump_instance(e);
@@ -1714,14 +1708,8 @@ impl SingleRWAVault {
             panic_with_error!(e, Error::InsufficientAllowance);
         }
         put_share_allowance(e, &from, &spender, allowance - amount);
+        // Snapshot before balance change so epoch yield is attributed to pre-burn shares.
         update_user_snapshot(e, &from);
-        // --- Effects ---
-        // Snapshot user and auto-claim pending yield to prevent accounting loss
-        update_user_snapshot(e, &from);
-        let pending = Self::pending_yield(e, from.clone());
-        if pending > 0 {
-            claim_yield_no_auth(e, &from);
-        }
         _burn(e, &from, amount);
         emit_burn(e, from, amount);
         bump_instance(e);
@@ -1883,41 +1871,6 @@ fn require_current_schema(e: &Env) {
     if get_storage_schema_version(e) != CURRENT_SCHEMA_VERSION {
         panic_with_error!(e, Error::MigrationRequired);
     }
-}
-
-/// Internal yield claim helper that performs the same state transitions as
-/// `claim_yield` but skips `require_auth`.
-///
-/// Used by `burn`/`burn_from` to prevent loss of pending yield when shares are
-/// burned.
-fn claim_yield_no_auth(e: &Env, caller: &Address) {
-    // --- Checks ---
-    require_current_schema(e);
-    acquire_lock(e);
-    require_not_frozen(e, SingleRWAVault::FREEZE_YIELD);
-    require_active_or_matured(e);
-    require_not_blacklisted(e, caller);
-
-    let amount = SingleRWAVault::pending_yield(e, caller.clone());
-    if amount <= 0 {
-        release_lock(e);
-        return;
-    }
-
-    // --- Effects ---
-    let epoch = get_current_epoch(e);
-    for i in 1..=epoch {
-        if !get_has_claimed_epoch(e, caller, i) && _get_user_shares_for_epoch(e, caller, i) > 0 {
-            put_has_claimed_epoch(e, caller, i, true);
-        }
-    }
-
-    put_total_yield_claimed(e, caller, get_total_yield_claimed(e, caller) + amount);
-    transfer_asset_from_vault(e, caller, amount);
-
-    emit_yield_claimed(e, caller.clone(), amount, epoch);
-    bump_instance(e);
-    release_lock(e);
 }
 
 fn require_admin(e: &Env, caller: &Address) {
