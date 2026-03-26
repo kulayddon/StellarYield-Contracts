@@ -49,4 +49,8 @@ pub enum Error {
     NotInEmergency = 28,
     /// User has already claimed their emergency distribution.
     AlreadyClaimedEmergency = 29,
+    /// Storage schema version is outdated; migrate() must be called.
+    MigrationRequired = 30,
+    /// Burn requires pending yield to be claimed first (Option A).
+    BurnRequiresYieldClaim = 31,
 }

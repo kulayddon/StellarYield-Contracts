@@ -3,6 +3,7 @@
 mod errors;
 mod events;
 mod math;
+mod migrations;
 mod storage;
 mod token_interface;
 mod types;
@@ -24,6 +25,7 @@ use crate::errors::Error;
 use crate::events::*;
 use crate::storage::*;
 use crate::token_interface::*;
+use crate::migrations::CURRENT_SCHEMA_VERSION;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract struct
@@ -105,6 +107,10 @@ impl SingleRWAVault {
         put_total_supply(e, 0i128);
         put_transfer_requires_kyc(e, true);
         put_total_deposited(e, 0i128);
+
+        // Versioning
+        put_contract_version(e, 1u32);
+        put_storage_schema_version(e, 1u32);
 
         e.storage()
             .instance()
@@ -250,6 +256,7 @@ impl SingleRWAVault {
     pub fn deposit(e: &Env, caller: Address, assets: i128, receiver: Address) -> i128 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         require_not_blacklisted(e, &caller);
@@ -294,6 +301,7 @@ impl SingleRWAVault {
     pub fn mint(e: &Env, caller: Address, shares: i128, receiver: Address) -> i128 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         require_not_blacklisted(e, &caller);
@@ -349,6 +357,7 @@ impl SingleRWAVault {
     ) -> i128 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         require_not_blacklisted(e, &caller);
@@ -400,6 +409,7 @@ impl SingleRWAVault {
     ) -> i128 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         require_not_blacklisted(e, &caller);
@@ -560,6 +570,7 @@ impl SingleRWAVault {
     pub fn distribute_yield(e: &Env, caller: Address, amount: i128) -> u32 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         // YieldOperator role required — also passes for FullOperator and admin.
@@ -596,6 +607,7 @@ impl SingleRWAVault {
     pub fn claim_yield(e: &Env, caller: Address) -> i128 {
         caller.require_auth();
         // --- Checks ---
+        require_current_schema(e);
         acquire_lock(e);
         require_not_paused(e);
         require_active_or_matured(e);
@@ -1380,11 +1392,34 @@ impl SingleRWAVault {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // View helpers
+    // Versioning and migration
     // ─────────────────────────────────────────────────────────────────
 
-    pub fn asset(e: &Env) -> Address {
-        get_asset(e)
+    /// Admin-only migration entry point. Updates storage schema to the latest version.
+    /// Emits DataMigrated event. No-op if already up-to-date.
+    pub fn migrate(e: &Env, caller: Address) {
+        caller.require_auth();
+        require_admin(e, &caller);
+
+        let old_version = get_storage_schema_version(e);
+        if old_version >= CURRENT_SCHEMA_VERSION {
+            // Already up-to-date; no-op
+            return;
+        }
+
+        crate::migrations::run_migrations(e, old_version);
+        emit_data_migrated(e, old_version, CURRENT_SCHEMA_VERSION);
+        bump_instance(e);
+    }
+
+    /// Returns the current storage schema version.
+    pub fn storage_schema_version(e: &Env) -> u32 {
+        get_storage_schema_version(e)
+    }
+
+    /// Returns the contract’s immutable code version.
+    pub fn contract_version(e: &Env) -> u32 {
+        get_contract_version(e)
     }
 
     pub fn current_apy(e: &Env) -> u32 {
@@ -1661,6 +1696,14 @@ fn _get_user_shares_for_epoch(e: &Env, user: &Address, epoch: u32) -> i128 {
 // ─────────────────────────────────────────────────────────────────────────────
 // Guard helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Require that storage schema is current; panics with MigrationRequired otherwise.
+/// Skipped for migrate, version, and admin functions.
+fn require_current_schema(e: &Env) {
+    if get_storage_schema_version(e) != CURRENT_SCHEMA_VERSION {
+        panic_with_error!(e, Error::MigrationRequired);
+    }
+}
 
 fn require_admin(e: &Env, caller: &Address) {
     if *caller != get_admin(e) {

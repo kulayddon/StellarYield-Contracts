@@ -75,6 +75,10 @@ pub enum DataKey {
     /// Unix timestamp deadline for funding; 0 means no deadline.
     FundingDeadline,
 
+    // --- Versioning ---
+    ContractVersion,
+    StorageSchemaVersion,
+
     // --- Epoch / yield ---
     CurrentEpoch,
     TotalYieldDistributed,
@@ -291,6 +295,12 @@ instance_put!(put_total_deposited, TotalDeposited, i128);
 // RedemptionCounter
 instance_get!(get_redemption_counter, RedemptionCounter, u32);
 instance_put!(put_redemption_counter, RedemptionCounter, u32);
+
+// Versioning
+instance_get!(get_contract_version, ContractVersion, u32);
+instance_put!(put_contract_version, ContractVersion, u32);
+instance_get!(get_storage_schema_version, StorageSchemaVersion, u32);
+instance_put!(put_storage_schema_version, StorageSchemaVersion, u32);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Operator (instance storage — same lifetime as admin)
