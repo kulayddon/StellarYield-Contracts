@@ -6,10 +6,7 @@ use soroban_sdk::{
 };
 
 use crate::{
-    storage::{
-        get_active_vaults, get_all_vaults, get_single_rwa_vaults, get_vault_count, get_vault_info,
-        push_active_vaults, push_all_vaults, push_single_rwa_vaults, put_vault_info,
-    },
+    storage::{get_vault_count, get_vault_info, put_vault_info, register_vault},
     types::{VaultInfo, VaultType},
     VaultFactory, VaultFactoryClient,
 };
@@ -58,11 +55,7 @@ fn inject_vault(e: &Env, factory_id: &Address, active: bool) -> Address {
     // against the factory address.
     e.as_contract(factory_id, || {
         put_vault_info(e, &vault, info);
-        push_all_vaults(e, vault.clone());
-        push_single_rwa_vaults(e, vault.clone());
-        if active {
-            push_active_vaults(e, vault.clone());
-        }
+        register_vault(e, vault.clone());
     });
 
     vault
@@ -194,21 +187,15 @@ fn test_set_vault_status_updates_active_list() {
     let vault = inject_vault(&e, &factory_id, true);
 
     // Initially active — should appear in ActiveVaults.
-    e.as_contract(&factory_id, || {
-        assert!(get_active_vaults(&e).contains(vault.clone()));
-    });
+    assert!(client.get_active_vaults().contains(vault.clone()));
 
     // Deactivate — must be removed from ActiveVaults.
     client.set_vault_status(&admin, &vault, &false);
-    e.as_contract(&factory_id, || {
-        assert!(!get_active_vaults(&e).contains(vault.clone()));
-    });
+    assert!(!client.get_active_vaults().contains(vault.clone()));
 
     // Reactivate — must be re-added.
     client.set_vault_status(&admin, &vault, &true);
-    e.as_contract(&factory_id, || {
-        assert!(get_active_vaults(&e).contains(vault.clone()));
-    });
+    assert!(client.get_active_vaults().contains(vault.clone()));
 }
 
 /// get_active_vaults returns only the active list directly (O(1) read).
@@ -267,12 +254,33 @@ fn test_vault_count_matches_list_length() {
         inject_vault(&e, &factory_id, true);
     }
 
+    let all = client.get_all_vaults();
     e.as_contract(&factory_id, || {
-        assert_eq!(
-            get_vault_count(&e) as usize,
-            get_all_vaults(&e).len() as usize
-        );
+        assert_eq!(get_vault_count(&e) as usize, all.len() as usize);
     });
+}
+
+/// Offset past the end of the active list returns an empty vec (#186).
+#[test]
+fn test_get_active_vaults_offset_out_of_range() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let (client, _) = setup_factory(&e);
+    let factory_id = client.address.clone();
+
+    // Create 3 active vaults
+    inject_vault(&e, &factory_id, true);
+    inject_vault(&e, &factory_id, true);
+    inject_vault(&e, &factory_id, true);
+
+    // Call with large offset
+    let page = client.get_active_vaults_paginated(&10, &5);
+    assert_eq!(
+        page.len(),
+        0,
+        "get_active_vaults_paginated must return empty vec for out-of-range offset"
+    );
 }
 
 // ─── get_vaults_paginated ─────────────────────────────────────────────────────
@@ -403,26 +411,30 @@ fn test_remove_inactive_vault_success() {
     let vault = inject_vault(&e, &factory_id, false /* inactive */);
 
     // Pre-conditions
+    let all_pre = client.get_all_vaults();
+    let single_pre = client.get_single_rwa_vaults();
     e.as_contract(&factory_id, || {
         assert!(get_vault_info(&e, &vault).is_some());
-        assert!(get_all_vaults(&e).contains(vault.clone()));
-        assert!(get_single_rwa_vaults(&e).contains(vault.clone()));
+        assert!(all_pre.contains(vault.clone()));
+        assert!(single_pre.contains(vault.clone()));
     });
 
     client.remove_vault(&admin, &vault);
 
     // Post-conditions: vault purged from all lists and VaultInfo deleted
+    let all_post = client.get_all_vaults();
+    let single_post = client.get_single_rwa_vaults();
     e.as_contract(&factory_id, || {
         assert!(
             get_vault_info(&e, &vault).is_none(),
             "VaultInfo must be deleted"
         );
         assert!(
-            !get_all_vaults(&e).contains(vault.clone()),
+            !all_post.contains(vault.clone()),
             "vault must not appear in AllVaults"
         );
         assert!(
-            !get_single_rwa_vaults(&e).contains(vault.clone()),
+            !single_post.contains(vault.clone()),
             "vault must not appear in SingleRwaVaults"
         );
     });
@@ -732,9 +744,7 @@ fn test_mixed_vault_types_registry_filtering() {
     };
     e.as_contract(&factory_id, || {
         put_vault_info(&e, &aggregator_vault, aggregator_info);
-        push_all_vaults(&e, aggregator_vault.clone());
-        push_active_vaults(&e, aggregator_vault.clone());
-        // Intentionally NOT pushed to SingleRwaVaults list.
+        register_vault(&e, aggregator_vault.clone());
     });
 
     // ── get_all_vaults returns both types ─────────────────────────────────────
@@ -758,17 +768,15 @@ fn test_mixed_vault_types_registry_filtering() {
     );
 
     // ── SingleRwa-specific list must not include the Aggregator vault ─────────
-    e.as_contract(&factory_id, || {
-        let single_rwa_list = get_single_rwa_vaults(&e);
-        assert!(
-            single_rwa_list.contains(single_rwa_vault.clone()),
-            "SingleRwaVaults list must contain the SingleRwa vault"
-        );
-        assert!(
-            !single_rwa_list.contains(aggregator_vault.clone()),
-            "SingleRwaVaults list must NOT contain the Aggregator vault"
-        );
-    });
+    let single_rwa_list = client.get_single_rwa_vaults();
+    assert!(
+        single_rwa_list.contains(single_rwa_vault.clone()),
+        "SingleRwaVaults list must contain the SingleRwa vault"
+    );
+    assert!(
+        !single_rwa_list.contains(aggregator_vault.clone()),
+        "SingleRwaVaults list must NOT contain the Aggregator vault"
+    );
 
     // ── VaultInfo.vault_type discriminates correctly ───────────────────────────
     let single_info = client

@@ -47,6 +47,8 @@ mod test_helpers;
 #[cfg(test)]
 mod test_lifecycle;
 #[cfg(test)]
+mod test_multiple_deposit_times;
+#[cfg(test)]
 mod test_multisig_emergency;
 #[cfg(test)]
 mod test_overflow;
