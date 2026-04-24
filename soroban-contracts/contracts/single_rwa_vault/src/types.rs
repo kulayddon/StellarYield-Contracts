@@ -192,6 +192,50 @@ pub struct TimelockAction {
     pub cancelled: bool,
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-epoch activity tracking for audit trail and analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Aggregate activity counters for a single epoch (or lifetime).
+///
+/// Stored in persistent storage keyed by epoch number.  Lifetime totals are
+/// stored under `ActivityDataKey::LifetimeActivity`.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EpochActivity {
+    pub deposits_count: u32,
+    pub deposits_volume: i128,
+    pub withdrawals_count: u32,
+    pub withdrawals_volume: i128,
+    pub transfers_count: u32,
+    pub transfers_volume: i128,
+    pub redemptions_count: u32,
+    pub redemptions_volume: i128,
+    pub yield_claims_count: u32,
+    pub yield_claims_volume: i128,
+    pub new_investors: u32,
+    pub exiting_investors: u32,
+}
+
+impl EpochActivity {
+    pub fn zero() -> Self {
+        EpochActivity {
+            deposits_count: 0,
+            deposits_volume: 0,
+            withdrawals_count: 0,
+            withdrawals_volume: 0,
+            transfers_count: 0,
+            transfers_volume: 0,
+            redemptions_count: 0,
+            redemptions_volume: 0,
+            yield_claims_count: 0,
+            yield_claims_volume: 0,
+            new_investors: 0,
+            exiting_investors: 0,
+        }
+    }
+}
+
 /// A pending multi-sig emergency withdrawal proposal.
 #[contracttype]
 #[derive(Clone, Debug)]

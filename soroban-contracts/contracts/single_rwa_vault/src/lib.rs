@@ -31,6 +31,8 @@ mod test_convert_erc4626;
 #[cfg(test)]
 mod test_deposit_limits;
 #[cfg(test)]
+mod test_epoch_activity;
+#[cfg(test)]
 mod test_epoch_history;
 #[cfg(test)]
 mod test_escrow;
@@ -118,6 +120,9 @@ impl SingleRWAVault {
     /// enforces a maximum of 10 arguments per contract function.
     pub fn __constructor(e: &Env, params: InitParams) {
         // --- Validation ---
+        if params.asset == e.current_contract_address() {
+            panic_with_error!(e, Error::InvalidInitParams);
+        }
         if params.share_decimals > 18 {
             panic_with_error!(e, Error::InvalidInitParams);
         }
@@ -367,10 +372,13 @@ impl SingleRWAVault {
         let shares = preview_deposit(e, assets);
 
         // --- Effects (state changes first) ---
+        let is_new_investor =
+            get_share_balance(e, &receiver) == 0 && get_escrowed_shares(e, &receiver) == 0;
         update_user_snapshot(e, &receiver);
         put_user_deposited(e, &receiver, get_user_deposited(e, &receiver) + assets);
         put_total_deposited(e, get_total_deposited(e) + assets);
         _mint(e, &receiver, shares);
+        record_deposit_activity(e, get_current_epoch(e), assets, is_new_investor);
 
         // --- Interaction (external call last) ---
         transfer_asset_to_vault(e, &caller, assets);
@@ -419,10 +427,13 @@ impl SingleRWAVault {
         }
 
         // --- Effects (state changes first) ---
+        let is_new_investor =
+            get_share_balance(e, &receiver) == 0 && get_escrowed_shares(e, &receiver) == 0;
         update_user_snapshot(e, &receiver);
         put_user_deposited(e, &receiver, get_user_deposited(e, &receiver) + assets);
         put_total_deposited(e, get_total_deposited(e) + assets);
         _mint(e, &receiver, shares);
+        record_deposit_activity(e, get_current_epoch(e), assets, is_new_investor);
 
         // --- Interaction (external call last) ---
         transfer_asset_to_vault(e, &caller, assets);
@@ -482,6 +493,9 @@ impl SingleRWAVault {
         let user_dep = get_user_deposited(e, &owner);
         put_user_deposited(e, &owner, (user_dep - assets).max(0));
 
+        let is_exiting = get_share_balance(e, &owner) == 0 && get_escrowed_shares(e, &owner) == 0;
+        record_withdrawal_activity(e, get_current_epoch(e), assets, is_exiting);
+
         // --- Interaction ---
         transfer_asset_from_vault(e, &receiver, assets);
 
@@ -533,6 +547,9 @@ impl SingleRWAVault {
 
         let user_dep = get_user_deposited(e, &owner);
         put_user_deposited(e, &owner, (user_dep - assets).max(0));
+
+        let is_exiting = get_share_balance(e, &owner) == 0 && get_escrowed_shares(e, &owner) == 0;
+        record_withdrawal_activity(e, get_current_epoch(e), assets, is_exiting);
 
         // --- Interaction ---
         transfer_asset_from_vault(e, &receiver, assets);
@@ -775,6 +792,7 @@ impl SingleRWAVault {
         put_last_claimed_epoch(e, &caller, epoch);
 
         put_total_yield_claimed(e, &caller, get_total_yield_claimed(e, &caller) + amount);
+        record_yield_claim_activity(e, epoch, amount);
         transfer_asset_from_vault(e, &caller, amount);
 
         emit_yield_claimed(e, caller, amount, epoch);
@@ -833,6 +851,7 @@ impl SingleRWAVault {
         }
 
         put_total_yield_claimed(e, &caller, get_total_yield_claimed(e, &caller) + amount);
+        record_yield_claim_activity(e, get_current_epoch(e), amount);
         transfer_asset_from_vault(e, &caller, amount);
 
         emit_yield_claimed(e, caller, amount, epoch);
@@ -1348,6 +1367,9 @@ impl SingleRWAVault {
             total_out += pending;
         }
 
+        let is_exiting = get_share_balance(e, &owner) == 0 && get_escrowed_shares(e, &owner) == 0;
+        record_redemption_activity(e, get_current_epoch(e), total_out, is_exiting);
+
         // --- Interaction ---
         transfer_asset_from_vault(e, &receiver, total_out);
 
@@ -1451,6 +1473,10 @@ impl SingleRWAVault {
 
         let user_dep = get_user_deposited(e, &req.user);
         put_user_deposited(e, &req.user, (user_dep - net_assets).max(0));
+
+        let is_exiting =
+            get_share_balance(e, &req.user) == 0 && get_escrowed_shares(e, &req.user) == 0;
+        record_redemption_activity(e, get_current_epoch(e), net_assets, is_exiting);
 
         // --- Interaction ---
         transfer_asset_from_vault(e, &req.user, net_assets);
@@ -2210,6 +2236,7 @@ impl SingleRWAVault {
         update_user_snapshots_for_transfer(e, &from, &to);
         spend_share_balance(e, &from, amount);
         receive_share_balance(e, &to, amount);
+        record_transfer_activity(e, get_current_epoch(e), amount);
         emit_transfer(e, from, to, amount);
         bump_instance(e);
     }
@@ -2226,6 +2253,7 @@ impl SingleRWAVault {
         put_share_allowance(e, &from, &spender, allowance - amount);
         spend_share_balance(e, &from, amount);
         receive_share_balance(e, &to, amount);
+        record_transfer_activity(e, get_current_epoch(e), amount);
         emit_transfer(e, from, to, amount);
         bump_instance(e);
     }
@@ -2264,6 +2292,22 @@ impl SingleRWAVault {
     }
     pub fn total_supply(e: &Env) -> i128 {
         get_total_supply(e)
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Activity tracking views (issue #122)
+    // ─────────────────────────────────────────────────────────────────
+
+    /// Returns the aggregate activity counters for the given epoch.
+    ///
+    /// Returns zeroed counters for epochs that have had no activity.
+    pub fn get_epoch_activity(e: &Env, epoch: u32) -> EpochActivity {
+        get_epoch_activity(e, epoch)
+    }
+
+    /// Returns aggregate activity counters across the entire vault lifetime.
+    pub fn get_lifetime_activity(e: &Env) -> EpochActivity {
+        get_lifetime_activity(e)
     }
 }
 

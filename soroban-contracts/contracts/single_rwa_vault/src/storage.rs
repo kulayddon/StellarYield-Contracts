@@ -15,7 +15,7 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, String, Vec};
 
 use crate::errors::Error;
-use crate::types::{RedemptionRequest, Role, VaultState};
+use crate::types::{EpochActivity, RedemptionRequest, Role, VaultState};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TTL constants
@@ -1036,6 +1036,125 @@ pub fn put_timelock_action(e: &Env, action_id: u32, action: crate::types::Timelo
 #[allow(dead_code)]
 pub fn has_timelock_action(e: &Env, action_id: u32) -> bool {
     e.storage().instance().has(&Key::TlkAct(action_id))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-epoch activity tracking (persistent, keyed by epoch or lifetime)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[contracttype]
+#[derive(Clone)]
+pub enum ActivityDataKey {
+    EpochActivity(u32),
+    LifetimeActivity,
+}
+
+pub fn get_epoch_activity(e: &Env, epoch: u32) -> EpochActivity {
+    e.storage()
+        .persistent()
+        .get(&ActivityDataKey::EpochActivity(epoch))
+        .unwrap_or_else(EpochActivity::zero)
+}
+
+pub fn put_epoch_activity(e: &Env, epoch: u32, activity: EpochActivity) {
+    let key = ActivityDataKey::EpochActivity(epoch);
+    e.storage().persistent().set(&key, &activity);
+    e.storage()
+        .persistent()
+        .extend_ttl(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+}
+
+pub fn get_lifetime_activity(e: &Env) -> EpochActivity {
+    e.storage()
+        .persistent()
+        .get(&ActivityDataKey::LifetimeActivity)
+        .unwrap_or_else(EpochActivity::zero)
+}
+
+pub fn put_lifetime_activity(e: &Env, activity: EpochActivity) {
+    let key = ActivityDataKey::LifetimeActivity;
+    e.storage().persistent().set(&key, &activity);
+    e.storage()
+        .persistent()
+        .extend_ttl(&key, BALANCE_LIFETIME_THRESHOLD, BALANCE_BUMP_AMOUNT);
+}
+
+pub fn record_deposit_activity(e: &Env, epoch: u32, volume: i128, is_new_investor: bool) {
+    let mut ea = get_epoch_activity(e, epoch);
+    ea.deposits_count += 1;
+    ea.deposits_volume += volume;
+    if is_new_investor {
+        ea.new_investors += 1;
+    }
+    put_epoch_activity(e, epoch, ea);
+
+    let mut la = get_lifetime_activity(e);
+    la.deposits_count += 1;
+    la.deposits_volume += volume;
+    if is_new_investor {
+        la.new_investors += 1;
+    }
+    put_lifetime_activity(e, la);
+}
+
+pub fn record_withdrawal_activity(e: &Env, epoch: u32, volume: i128, is_exiting: bool) {
+    let mut ea = get_epoch_activity(e, epoch);
+    ea.withdrawals_count += 1;
+    ea.withdrawals_volume += volume;
+    if is_exiting {
+        ea.exiting_investors += 1;
+    }
+    put_epoch_activity(e, epoch, ea);
+
+    let mut la = get_lifetime_activity(e);
+    la.withdrawals_count += 1;
+    la.withdrawals_volume += volume;
+    if is_exiting {
+        la.exiting_investors += 1;
+    }
+    put_lifetime_activity(e, la);
+}
+
+pub fn record_transfer_activity(e: &Env, epoch: u32, volume: i128) {
+    let mut ea = get_epoch_activity(e, epoch);
+    ea.transfers_count += 1;
+    ea.transfers_volume += volume;
+    put_epoch_activity(e, epoch, ea);
+
+    let mut la = get_lifetime_activity(e);
+    la.transfers_count += 1;
+    la.transfers_volume += volume;
+    put_lifetime_activity(e, la);
+}
+
+pub fn record_redemption_activity(e: &Env, epoch: u32, volume: i128, is_exiting: bool) {
+    let mut ea = get_epoch_activity(e, epoch);
+    ea.redemptions_count += 1;
+    ea.redemptions_volume += volume;
+    if is_exiting {
+        ea.exiting_investors += 1;
+    }
+    put_epoch_activity(e, epoch, ea);
+
+    let mut la = get_lifetime_activity(e);
+    la.redemptions_count += 1;
+    la.redemptions_volume += volume;
+    if is_exiting {
+        la.exiting_investors += 1;
+    }
+    put_lifetime_activity(e, la);
+}
+
+pub fn record_yield_claim_activity(e: &Env, epoch: u32, volume: i128) {
+    let mut ea = get_epoch_activity(e, epoch);
+    ea.yield_claims_count += 1;
+    ea.yield_claims_volume += volume;
+    put_epoch_activity(e, epoch, ea);
+
+    let mut la = get_lifetime_activity(e);
+    la.yield_claims_count += 1;
+    la.yield_claims_volume += volume;
+    put_lifetime_activity(e, la);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
