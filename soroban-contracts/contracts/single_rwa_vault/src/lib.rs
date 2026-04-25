@@ -2925,6 +2925,12 @@ impl SingleRWAVault {
     pub fn name(e: &Env) -> String {
         get_share_name(e)
     }
+    /// Returns the human-readable ticker/display symbol for the share token.
+    ///
+    /// This symbol is immutable and set once during contract initialization via the
+    /// `share_symbol` field in the `InitParams` struct. It cannot be changed after
+    /// contract deployment. The symbol is intended for display purposes in user
+    /// interfaces and wallets.
     pub fn symbol(e: &Env) -> String {
         get_share_symbol(e)
     }
