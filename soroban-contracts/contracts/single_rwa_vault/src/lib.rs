@@ -128,6 +128,11 @@ impl SingleRWAVault {
     /// enforces a maximum of 10 arguments per contract function.
     pub fn __constructor(e: &Env, params: InitParams) {
         // --- Validation ---
+        require_valid_address(e, &params.asset);
+        require_valid_address(e, &params.admin);
+        require_valid_address(e, &params.zkme_verifier);
+        require_valid_address(e, &params.cooperator);
+        
         if params.asset == e.current_contract_address() {
             panic_with_error!(e, Error::InvalidInitParams);
         }
@@ -315,6 +320,7 @@ impl SingleRWAVault {
         caller.require_auth();
         // ComplianceOfficer role required — also passes for FullOperator and admin.
         require_role(e, &caller, Role::ComplianceOfficer);
+        require_valid_address(e, &verifier);
         let old = get_zkme_verifier(e);
         put_zkme_verifier(e, verifier.clone());
         emit_zkme_verifier_updated(e, old, verifier);
@@ -325,6 +331,7 @@ impl SingleRWAVault {
         caller.require_auth();
         // ComplianceOfficer role required — also passes for FullOperator and admin.
         require_role(e, &caller, Role::ComplianceOfficer);
+        require_valid_address(e, &new_cooperator);
         let old = get_cooperator(e);
         put_cooperator(e, new_cooperator.clone());
         emit_cooperator_updated(e, old, new_cooperator);
@@ -1126,6 +1133,26 @@ impl SingleRWAVault {
         }
     }
 
+    /// Get composite epoch metadata in a single call for efficient indexer queries.
+    /// Returns yield amount, total shares, and timestamp with robust bounds checking.
+    pub fn get_epoch_metadata(e: &Env, epoch: u32) -> EpochMetadata {
+        // Bounds check: epoch must be valid (1 to current_epoch)
+        if epoch == 0 {
+            panic_with_error!(e, Error::InvalidEpochRange);
+        }
+        let current = get_current_epoch(e);
+        if epoch > current {
+            panic_with_error!(e, Error::InvalidEpochRange);
+        }
+        
+        EpochMetadata {
+            epoch,
+            yield_amount: get_epoch_yield(e, epoch),
+            total_shares: get_epoch_total_shares(e, epoch),
+            timestamp: get_epoch_timestamp(e, epoch),
+        }
+    }
+
     /// Get epoch data for a range [start, end] inclusive.
     /// Maximum range size is 50 epochs.
     pub fn get_epoch_range(e: &Env, start: u32, end: u32) -> Vec<EpochData> {
@@ -1912,6 +1939,7 @@ impl SingleRWAVault {
     pub fn grant_role(e: &Env, caller: Address, addr: Address, role: Role) {
         caller.require_auth();
         require_admin(e, &caller);
+        require_valid_address(e, &addr);
         put_role(e, addr.clone(), role.clone(), true);
         emit_role_granted(e, addr, role);
         bump_instance(e);
@@ -1940,6 +1968,7 @@ impl SingleRWAVault {
     pub fn set_operator(e: &Env, caller: Address, operator: Address, status: bool) {
         caller.require_auth();
         require_admin(e, &caller);
+        require_valid_address(e, &operator);
         put_operator(e, operator.clone(), status);
         emit_operator_updated(e, operator, status);
         bump_instance(e);
@@ -2534,10 +2563,6 @@ impl SingleRWAVault {
     }
 
     /// Returns the current storage schema version.
-    pub fn storage_schema_version(e: &Env) -> u32 {
-        get_storage_schema_version(e)
-    }
-
     /// Returns the contract’s immutable code version.
     pub fn contract_version(e: &Env) -> u32 {
         get_contract_version(e)
@@ -2717,6 +2742,14 @@ impl SingleRWAVault {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Validates that an address is not the zero-equivalent (contract's own address).
+/// This prevents null-like semantics where the contract address is used as a placeholder.
+fn require_valid_address(e: &Env, addr: &Address) {
+    if *addr == e.current_contract_address() {
+        panic_with_error!(e, Error::ZeroAddress);
+    }
+}
 
 fn total_assets(e: &Env) -> i128 {
     get_total_deposited(e)
