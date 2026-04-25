@@ -1,6 +1,6 @@
 //! Shared types for VaultFactory.
 
-use soroban_sdk::{contracttype, Address, String};
+use soroban_sdk::{contracttype, Address, BytesN, String};
 
 /// Vault type — mirrors the Solidity VaultType enum.
 #[contracttype]
@@ -77,6 +77,29 @@ pub type CreateVaultParams = BatchVaultParams;
 // ─────────────────────────────────────────────────────────────────────────────
 // Role-Based Access Control
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Snapshot of factory-level defaults returned by `get_defaults_snapshot()`.
+///
+/// Useful for vault creation forms and deployment scripts that need all
+/// factory defaults in a single contract call.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct FactoryDefaultsSnapshot {
+    pub default_asset: Address,
+    pub zkme_verifier: Address,
+    pub cooperator: Address,
+    /// Default early-redemption fee in basis points (e.g. 200 = 2 %).
+    pub fee_bps: u32,
+    pub vault_wasm_hash: BytesN<32>,
+}
+
+/// Status filter used by `list_vaults_by_status`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum VaultStatus {
+    Active,
+    Inactive,
+}
 
 /// Granular operator role for on-chain access control.
 ///

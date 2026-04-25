@@ -93,6 +93,7 @@ pub struct SingleRWAVault;
 
 /// Fixed-point precision for yield_per_share calculations (10^6).
 const PRECISION: i128 = 1_000_000;
+const MAX_OPERATOR_PAGE_SIZE: u32 = 50;
 
 /// Virtual offset for share price inflation attack mitigation (OpenZeppelin approach).
 /// Set to 10^6 to provide robust protection for 6-decimal assets like USDC.
@@ -1209,6 +1210,24 @@ impl SingleRWAVault {
         mat.saturating_sub(now)
     }
 
+    /// Returns `true` when maturity conditions are met.
+    ///
+    /// Evaluates to `true` in two cases:
+    /// - The vault has already been transitioned to `VaultState::Matured` (or `Closed`).
+    /// - The vault is still `Active` but the current ledger timestamp has reached
+    ///   or passed the configured maturity date.
+    ///
+    /// This lets client code check "is the RWA past its term?" in a single call
+    /// without separately reading vault_state + maturity_date and comparing them.
+    pub fn is_matured(e: &Env) -> bool {
+        let state = get_vault_state(e);
+        match state {
+            VaultState::Matured | VaultState::Closed => true,
+            VaultState::Active => e.ledger().timestamp() >= get_maturity_date(e),
+            _ => false,
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // Deposit limits
     // ─────────────────────────────────────────────────────────────────
@@ -1630,6 +1649,26 @@ impl SingleRWAVault {
     /// Backward-compatible: returns `true` when `account` holds `FullOperator`.
     pub fn is_operator(e: &Env, account: Address) -> bool {
         get_operator(e, &account)
+    }
+
+    /// Returns a bounded page of addresses that currently hold the `FullOperator` superrole.
+    ///
+    /// `offset` is zero-based within the full operator list.
+    /// `limit` is capped at `MAX_OPERATOR_PAGE_SIZE` (50) to prevent expensive queries.
+    /// Returns an empty vec when `offset >= total` or `limit == 0`.
+    pub fn list_operators(e: &Env, offset: u32, limit: u32) -> Vec<Address> {
+        let capped = limit.min(MAX_OPERATOR_PAGE_SIZE);
+        let operators = get_operator_list(e);
+        let total = operators.len();
+        let mut result = Vec::new(e);
+        if offset >= total || capped == 0 {
+            return result;
+        }
+        let end = (offset + capped).min(total);
+        for i in offset..end {
+            result.push_back(operators.get(i).unwrap());
+        }
+        result
     }
 
     pub fn transfer_admin(e: &Env, caller: Address, _new_admin: Address) {

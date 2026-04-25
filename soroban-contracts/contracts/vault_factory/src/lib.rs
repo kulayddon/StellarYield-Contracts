@@ -28,6 +28,9 @@ use crate::storage::*;
 /// exceeding this limit risks exhausting the transaction's CPU budget.
 const MAX_BATCH_SIZE: u32 = 10;
 
+/// Maximum page size for status-filtered vault list queries.
+const MAX_STATUS_PAGE_SIZE: u32 = 50;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,6 +61,7 @@ impl VaultFactory {
         put_default_zkme_verifier(e, zkme_verifier);
         put_default_cooperator(e, cooperator);
         put_vault_wasm_hash(e, vault_wasm_hash);
+        put_default_fee_bps(e, 200u32);
         put_operator(e, admin, true);
         // Versioning
         put_contract_version(e, 1u32);
@@ -429,6 +433,60 @@ impl VaultFactory {
 
     pub fn aggregator_vault(e: &Env) -> Option<Address> {
         get_aggregator_vault(e)
+    }
+
+    /// Returns all factory-level defaults in a single call.
+    ///
+    /// Useful for vault creation forms and deployment scripts that need the
+    /// current default asset, verifier, cooperator, fee bps, and wasm hash
+    /// without making five separate contract calls.
+    pub fn get_defaults_snapshot(e: &Env) -> FactoryDefaultsSnapshot {
+        bump_instance(e);
+        FactoryDefaultsSnapshot {
+            default_asset: get_default_asset(e),
+            zkme_verifier: get_default_zkme_verifier(e),
+            cooperator: get_default_cooperator(e),
+            fee_bps: get_default_fee_bps(e),
+            vault_wasm_hash: get_vault_wasm_hash(e),
+        }
+    }
+
+    /// Returns a status-filtered page of vault addresses.
+    ///
+    /// `status` must be `VaultStatus::Active` or `VaultStatus::Inactive`.
+    /// `offset` is zero-based within the filtered set.
+    /// `limit` is capped at `MAX_STATUS_PAGE_SIZE` (50) to prevent expensive queries.
+    /// Returns an empty vec when the filtered set is empty or `offset` is out of range.
+    pub fn list_vaults_by_status(
+        e: &Env,
+        status: VaultStatus,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<Address> {
+        let capped = limit.min(MAX_STATUS_PAGE_SIZE);
+        let total = get_vault_count(e);
+        let mut result: Vec<Address> = Vec::new(e);
+        if capped == 0 {
+            return result;
+        }
+        let want_active = status == VaultStatus::Active;
+        let mut cursor: u32 = 0;
+        for i in 0..total {
+            if let Some(vault) = get_vault_at_index(e, i) {
+                if let Some(info) = get_vault_info(e, &vault) {
+                    if info.active == want_active {
+                        if cursor >= offset {
+                            result.push_back(vault);
+                            if result.len() >= capped {
+                                break;
+                            }
+                        }
+                        cursor += 1;
+                    }
+                }
+            }
+        }
+        result
     }
 
     // ─────────────────────────────────────────────────────────────────

@@ -127,6 +127,9 @@ pub enum Key {
     // --- Transfer KYC gate ---
     XferKyc,
 
+    // --- Operator list (FullOperator addresses) ---
+    OperatorList,
+
     // --- Emergency pro-rata distribution ---
     EmgBal,
     HasClmEmg(Address),
@@ -220,6 +223,7 @@ impl soroban_sdk::IntoVal<Env, soroban_sdk::Val> for Key {
             Key::RedCnt => 42u32.into_val(env),
             Key::TransferExemptList => 45u32.into_val(env),
             Key::XferKyc => 46u32.into_val(env),
+            Key::OperatorList => 52u32.into_val(env),
             Key::EmgBal => 47u32.into_val(env),
             Key::EmgTotSup => 49u32.into_val(env),
             Key::TlkDelay => 50u32.into_val(env),
@@ -308,6 +312,7 @@ impl soroban_sdk::TryFromVal<Env, soroban_sdk::Val> for Key {
             42 => Ok(Key::RedCnt),
             45 => Ok(Key::TransferExemptList),
             46 => Ok(Key::XferKyc),
+            52 => Ok(Key::OperatorList),
             47 => Ok(Key::EmgBal),
             49 => Ok(Key::EmgTotSup),
             50 => Ok(Key::TlkDelay),
@@ -570,9 +575,43 @@ pub fn get_operator(e: &Env, addr: &Address) -> bool {
     get_role(e, addr, Role::FullOperator)
 }
 
+/// Returns the list of all addresses currently holding the FullOperator superrole.
+pub fn get_operator_list(e: &Env) -> Vec<Address> {
+    e.storage()
+        .instance()
+        .get(&Key::OperatorList)
+        .unwrap_or_else(|| Vec::new(e))
+}
+
+fn put_operator_list(e: &Env, list: &Vec<Address>) {
+    if list.is_empty() {
+        e.storage().instance().remove(&Key::OperatorList);
+    } else {
+        e.storage().instance().set(&Key::OperatorList, list);
+    }
+}
+
 /// Grant or revoke the `FullOperator` superrole for `addr`.
+/// Maintains the operator list so `list_operators` can paginate without scanning all keys.
 pub fn put_operator(e: &Env, addr: Address, val: bool) {
-    put_role(e, addr, Role::FullOperator, val);
+    put_role(e, addr.clone(), Role::FullOperator, val);
+
+    let mut list = get_operator_list(e);
+    let already_listed = (0..list.len()).any(|i| list.get(i).unwrap() == addr);
+
+    if val && !already_listed {
+        list.push_back(addr);
+        put_operator_list(e, &list);
+    } else if !val && already_listed {
+        let mut updated = Vec::new(e);
+        for i in 0..list.len() {
+            let entry = list.get(i).unwrap();
+            if entry != addr {
+                updated.push_back(entry);
+            }
+        }
+        put_operator_list(e, &updated);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
