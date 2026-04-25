@@ -366,6 +366,27 @@ impl VaultFactory {
         get_vault_info(e, &vault)
     }
 
+    /// Returns a lightweight metadata brief for a vault address.
+    ///
+    /// This is useful for list pages where full vault info is unnecessary.
+    /// Returns `None` if the vault is not registered.
+    ///
+    /// # Arguments
+    /// * `vault` - The vault address to query
+    ///
+    /// # Returns
+    /// `Some(VaultBrief)` with name, symbol, asset, active flag, and created_at,
+    /// or `None` if vault not found.
+    pub fn get_vault_brief(e: &Env, vault: Address) -> Option<VaultBrief> {
+        get_vault_info(e, &vault).map(|info| VaultBrief {
+            name: info.name,
+            symbol: info.symbol,
+            asset: info.asset,
+            active: info.active,
+            created_at: info.created_at,
+        })
+    }
+
     pub fn is_registered_vault(e: &Env, vault: Address) -> bool {
         get_vault_info(e, &vault).is_some()
     }
