@@ -1638,6 +1638,14 @@ impl SingleRWAVault {
         bump_instance(e);
     }
 
+    /// Returns the Unix timestamp (in seconds) when the vault is expected to mature.
+    ///
+    /// ## Interpretaton & Units
+    /// - **Units**: Unix seconds (ledger timestamp).
+    /// - **Extension**: The admin may extend the maturity date via `set_maturity_date`
+    ///   if the underlying RWA term is extended.
+    /// - **Maturity Check**: Clients should compare this value with the current
+    ///   ledger timestamp to determine if the term has ended.
     pub fn maturity_date(e: &Env) -> u64 {
         get_maturity_date(e)
     }
@@ -1718,6 +1726,14 @@ impl SingleRWAVault {
         assets >= target
     }
 
+    /// Returns the remaining time until the maturity date in seconds.
+    ///
+    /// Returns 0 if the maturity date has already passed.
+    ///
+    /// ## Guidance
+    /// Clients use this to calculate "time-to-maturity" for yield projections.
+    /// Note that this value is based on the `ledger().timestamp()`, which is
+    /// set when the ledger closes.
     pub fn time_to_maturity(e: &Env) -> u64 {
         let now = e.ledger().timestamp();
         let mat = get_maturity_date(e);
@@ -2496,7 +2512,21 @@ impl SingleRWAVault {
         bump_instance(e);
     }
 
+    /// Returns true if the vault is currently paused.
+    ///
+    /// When paused, all state-changing operations except for `unpause` and
+    /// `emergency_withdraw` are blocked.
     pub fn paused(e: &Env) -> bool {
+        get_paused(e)
+    }
+
+    /// Alias for `paused()`. Returns true if the vault is currently paused.
+    pub fn is_paused(e: &Env) -> bool {
+        get_paused(e)
+    }
+
+    /// Alias for `paused()`. Returns true if the vault is currently paused.
+    pub fn is_pause(e: &Env) -> bool {
         get_paused(e)
     }
 

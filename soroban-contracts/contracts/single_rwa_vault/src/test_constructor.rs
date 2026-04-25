@@ -69,6 +69,8 @@ fn test_initial_vault_state() {
 
     assert_eq!(v.vault_state(), VaultState::Funding);
     assert!(!v.paused());
+    assert!(!v.is_paused());
+    assert!(!v.is_pause());
     assert_eq!(v.current_epoch(), 0u32);
 }
 
