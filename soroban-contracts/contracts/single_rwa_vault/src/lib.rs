@@ -1092,11 +1092,13 @@ impl SingleRWAVault {
     ///
     /// This is a view function useful for frontend previews and preventing
     /// failed transactions. It validates:
-    /// - Share sufficiency (user has enough shares)
     /// - Vault state constraints (Active or Matured)
     /// - Pause status
     /// - Blacklist status
-    /// - Any lockups (escrowed shares)
+    /// - Share sufficiency (user has enough non-escrowed shares)
+    ///
+    /// Note: Escrowed shares (from early redemption requests) are not available
+    /// for redemption until the request is cancelled or rejected.
     pub fn can_redeem(e: &Env, user: Address, shares: i128) -> CanRedeemResult {
         // Check if vault is paused
         if get_paused(e) {
@@ -1123,25 +1125,13 @@ impl SingleRWAVault {
             };
         }
 
-        // Check share sufficiency
+        // Check share sufficiency (balance already excludes escrowed shares)
         let balance = get_share_balance(e, &user);
         if balance < shares {
             return CanRedeemResult {
                 ok: false,
                 reason: Some(String::from_str(e, "Insufficient shares")),
             };
-        }
-
-        // Check for escrowed shares (lockups)
-        let escrowed = get_escrowed_shares(e, &user);
-        if escrowed > 0 {
-            let available = balance.saturating_sub(escrowed);
-            if available < shares {
-                return CanRedeemResult {
-                    ok: false,
-                    reason: Some(String::from_str(e, "Shares locked in escrow")),
-                };
-            }
         }
 
         // All checks passed
@@ -1770,3 +1760,5 @@ mod test_constructor_validation;
 mod test_overflow;
 #[cfg(test)]
 mod test_token;
+#[cfg(test)]
+mod test_can_redeem;
