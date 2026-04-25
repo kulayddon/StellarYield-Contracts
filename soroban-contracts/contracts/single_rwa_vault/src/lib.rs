@@ -1700,6 +1700,14 @@ impl SingleRWAVault {
             is_kyc_verified: Self::is_kyc_verified(e, address),
         }
     }
+    /// Returns the total asset amount targeted during the Funding state.
+    ///
+    /// ## Decimals & Formatting
+    /// - **Units**: Expressed in the vault's underlying asset units.
+    /// - **Decimals**: Integrators should use the underlying asset's decimals
+    ///   (typically 6 for USDC-like assets) for formatting, NOT the share
+    ///   token decimals.
+    /// - **Default**: Many RWA vaults use 6 decimals as the standard for USD-pegged assets.
     pub fn funding_target(e: &Env) -> i128 {
         get_funding_target(e)
     }
