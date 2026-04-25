@@ -69,6 +69,8 @@ fn test_initial_vault_state() {
 
     assert_eq!(v.vault_state(), VaultState::Funding);
     assert!(!v.paused());
+    assert!(!v.is_paused());
+    assert!(!v.is_pause());
     assert_eq!(v.current_epoch(), 0u32);
 }
 
@@ -89,6 +91,7 @@ fn test_vault_config_matches_init_params() {
         v.early_redemption_fee_bps(),
         ctx.params.early_redemption_fee_bps
     );
+    assert_eq!(v.operator_fee_bps(), ctx.params.operator_fee_bps);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

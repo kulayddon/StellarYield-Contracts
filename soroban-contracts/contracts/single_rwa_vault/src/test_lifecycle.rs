@@ -287,6 +287,9 @@ fn test_large_value_deposit_does_not_overflow() {
     let ctx = setup_with_kyc_bypass();
     let v = ctx.vault();
 
+    // Increase funding target to avoid FundingTargetExceeded during overflow test
+    v.set_funding_target(&ctx.operator, &(i128::MAX / 2));
+
     let large_amount = i128::MAX / 4;
 
     let user_a = create_user_with_balance(&ctx, large_amount);
@@ -311,6 +314,9 @@ fn test_large_value_deposit_does_not_overflow() {
 fn test_large_value_mint_does_not_overflow() {
     let ctx = setup_with_kyc_bypass();
     let v = ctx.vault();
+
+    // Increase funding target to avoid FundingTargetExceeded during overflow test
+    v.set_funding_target(&ctx.operator, &(i128::MAX / 2));
 
     // Large share amount
     let large_shares = i128::MAX / 4;
