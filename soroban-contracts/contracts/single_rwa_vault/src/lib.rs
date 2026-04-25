@@ -173,7 +173,9 @@ impl SingleRWAVault {
         require_admin(e, &caller);
         let old = get_cooperator(e);
         put_cooperator(e, new_cooperator.clone());
-        emit_cooperator_updated(e, old, new_cooperator);
+        emit_cooperator_updated(e, old.clone(), new_cooperator.clone());
+        // Emit additional event for cooperator fee tracking
+        emit_cooperator_fee_updated(e, old, new_cooperator);
         bump_instance(e);
     }
 
@@ -1076,6 +1078,77 @@ impl SingleRWAVault {
 
     pub fn is_blacklisted(e: &Env, address: Address) -> bool {
         get_blacklisted(e, &address)
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // View helpers for frontend and scripts
+    // ─────────────────────────────────────────────────────────────────
+
+    /// Check if a user can redeem a specific amount of shares.
+    ///
+    /// Returns a `CanRedeemResult` struct with:
+    /// - `ok`: true if redemption is possible
+    /// - `reason`: optional error message if redemption is not possible
+    ///
+    /// This is a view function useful for frontend previews and preventing
+    /// failed transactions. It validates:
+    /// - Share sufficiency (user has enough shares)
+    /// - Vault state constraints (Active or Matured)
+    /// - Pause status
+    /// - Blacklist status
+    /// - Any lockups (escrowed shares)
+    pub fn can_redeem(e: &Env, user: Address, shares: i128) -> CanRedeemResult {
+        // Check if vault is paused
+        if get_paused(e) {
+            return CanRedeemResult {
+                ok: false,
+                reason: Some(String::from_str(e, "Vault is paused")),
+            };
+        }
+
+        // Check vault state
+        let state = get_vault_state(e);
+        if state != VaultState::Active && state != VaultState::Matured {
+            return CanRedeemResult {
+                ok: false,
+                reason: Some(String::from_str(e, "Vault not active or matured")),
+            };
+        }
+
+        // Check if user is blacklisted
+        if get_blacklisted(e, &user) {
+            return CanRedeemResult {
+                ok: false,
+                reason: Some(String::from_str(e, "User is blacklisted")),
+            };
+        }
+
+        // Check share sufficiency
+        let balance = get_share_balance(e, &user);
+        if balance < shares {
+            return CanRedeemResult {
+                ok: false,
+                reason: Some(String::from_str(e, "Insufficient shares")),
+            };
+        }
+
+        // Check for escrowed shares (lockups)
+        let escrowed = get_escrowed_shares(e, &user);
+        if escrowed > 0 {
+            let available = balance.saturating_sub(escrowed);
+            if available < shares {
+                return CanRedeemResult {
+                    ok: false,
+                    reason: Some(String::from_str(e, "Shares locked in escrow")),
+                };
+            }
+        }
+
+        // All checks passed
+        CanRedeemResult {
+            ok: true,
+            reason: None,
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────

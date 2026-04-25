@@ -162,3 +162,9 @@ pub fn emit_refunded(e: &Env, user: Address, amount: i128) {
     e.events()
         .publish((symbol_short!("refunded"), user), amount);
 }
+
+/// Emitted by `set_cooperator` — cooperator address has been updated.
+pub fn emit_cooperator_fee_updated(e: &Env, old: Address, new: Address) {
+    e.events()
+        .publish((symbol_short!("coop_fee"),), (old, new));
+}

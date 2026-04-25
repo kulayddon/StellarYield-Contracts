@@ -82,3 +82,16 @@ pub struct RedemptionRequest {
     pub request_time: u64,
     pub processed: bool,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CanRedeemResult struct (returned by can_redeem)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CanRedeemResult {
+    /// True if the user can redeem the specified shares.
+    pub ok: bool,
+    /// Optional reason string if redemption is not possible.
+    pub reason: Option<String>,
+}
