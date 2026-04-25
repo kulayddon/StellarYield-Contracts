@@ -874,6 +874,62 @@ impl SingleRWAVault {
         total
     }
 
+    /// Return a bounded, per-epoch pending-yield breakdown for wallet UIs.
+    ///
+    /// Ordered by ascending epoch, starting from `last_claimed_epoch + 1`, and
+    /// includes at most `max_epochs` entries (capped at 50).
+    pub fn pending_yield_breakdown(
+        e: &Env,
+        user: Address,
+        max_epochs: u32,
+    ) -> Vec<PendingYieldEpoch> {
+        const MAX_EPOCHS: u32 = 50;
+        let cap = max_epochs.min(MAX_EPOCHS);
+        let mut out: Vec<PendingYieldEpoch> = Vec::new(e);
+        if cap == 0 {
+            return out;
+        }
+
+        let cur = get_current_epoch(e);
+        let start = get_last_claimed_epoch(e, &user) + 1;
+        for epoch in start..=cur {
+            if out.len() >= cap {
+                break;
+            }
+            if get_has_claimed_epoch(e, &user, epoch) {
+                continue;
+            }
+            let pending = Self::pending_yield_for_epoch(e, user.clone(), epoch);
+            if pending > 0 {
+                out.push_back(PendingYieldEpoch { epoch, pending });
+            }
+        }
+        out
+    }
+
+    /// Non-binding heuristic for the loop work `claim_yield(user)` may do.
+    pub fn estimate_claim_cost_hint(e: &Env, user: Address) -> ClaimCostHint {
+        let current_epoch = get_current_epoch(e);
+        let last_claimed_epoch = get_last_claimed_epoch(e, &user);
+        let epochs_scanned = current_epoch.saturating_sub(last_claimed_epoch);
+
+        let mut unclaimed_epochs = 0u32;
+        if epochs_scanned > 0 {
+            for epoch in (last_claimed_epoch + 1)..=current_epoch {
+                if !get_has_claimed_epoch(e, &user, epoch) {
+                    unclaimed_epochs += 1;
+                }
+            }
+        }
+
+        ClaimCostHint {
+            current_epoch,
+            last_claimed_epoch,
+            epochs_scanned,
+            unclaimed_epochs,
+        }
+    }
+
     pub fn pending_yield_for_epoch(e: &Env, user: Address, epoch: u32) -> i128 {
         let cur = get_current_epoch(e);
         if epoch == 0 || epoch > cur || get_has_claimed_epoch(e, &user, epoch) {
@@ -1197,6 +1253,23 @@ impl SingleRWAVault {
     }
     pub fn funding_target(e: &Env) -> i128 {
         get_funding_target(e)
+    }
+
+    /// Funding progress in basis points (0–10_000).
+    ///
+    /// Uses `total_assets / funding_target`, clamped to 10_000. Returns 0 when
+    /// `funding_target` is 0.
+    pub fn funding_progress_bps(e: &Env) -> u32 {
+        let target = get_funding_target(e);
+        if target <= 0 {
+            return 0;
+        }
+        let assets = total_assets(e);
+        if assets <= 0 {
+            return 0;
+        }
+        let bps = math::mul_div(e, assets, 10_000, target);
+        bps.clamp(0, 10_000) as u32
     }
 
     pub fn is_funding_target_met(e: &Env) -> bool {
@@ -1572,6 +1645,27 @@ impl SingleRWAVault {
 
     pub fn early_redemption_fee_bps(e: &Env) -> u32 {
         get_early_redemption_fee_bps(e)
+    }
+
+    /// Read-only preview of gross assets, fee, and net payout for an early redemption.
+    ///
+    /// Formula (asset units):
+    /// - gross_assets = preview_redeem(shares)
+    /// - fee_amount   = gross_assets * fee_bps / 10_000
+    /// - net_assets   = gross_assets - fee_amount
+    pub fn estimate_early_redemption_fee(e: &Env, shares: i128) -> EarlyRedemptionFeePreview {
+        if shares <= 0 {
+            panic_with_error!(e, Error::ZeroAmount);
+        }
+        let gross_assets = preview_redeem(e, shares);
+        let fee_bps = get_early_redemption_fee_bps(e);
+        let fee_amount = math::mul_div(e, gross_assets, fee_bps as i128, 10_000);
+        EarlyRedemptionFeePreview {
+            gross_assets,
+            fee_amount,
+            net_assets: gross_assets - fee_amount,
+            fee_bps,
+        }
     }
 
     /// Set the early redemption fee (only by operator).

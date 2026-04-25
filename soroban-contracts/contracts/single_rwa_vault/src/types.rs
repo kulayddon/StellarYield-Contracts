@@ -167,6 +167,48 @@ pub struct UserEpochYield {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lightweight view helper structs (front-end UX helpers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Read-only preview of the fee charged for an early redemption request.
+///
+/// All values are expressed in the vault's underlying asset units.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EarlyRedemptionFeePreview {
+    /// Gross assets that `shares` would redeem for (before fee).
+    pub gross_assets: i128,
+    /// Early redemption fee amount (gross_assets * fee_bps / 10_000).
+    pub fee_amount: i128,
+    /// Net assets paid out (gross_assets - fee_amount).
+    pub net_assets: i128,
+    /// Fee rate in basis points applied in the preview.
+    pub fee_bps: u32,
+}
+
+/// Per-epoch pending yield breakdown item for a user.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PendingYieldEpoch {
+    pub epoch: u32,
+    pub pending: i128,
+}
+
+/// Non-binding heuristic hint of the work required to claim yield for a user.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ClaimCostHint {
+    /// Current epoch at time of estimation.
+    pub current_epoch: u32,
+    /// Cursor used by claiming logic (`last_claimed_epoch`).
+    pub last_claimed_epoch: u32,
+    /// Number of epochs the claim path is expected to scan.
+    pub epochs_scanned: u32,
+    /// Number of epochs that have not been marked claimed for the user.
+    pub unclaimed_epochs: u32,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Timelock mechanism for critical admin operations
 // ─────────────────────────────────────────────────────────────────────────────
 
