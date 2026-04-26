@@ -396,6 +396,12 @@ Each contract operation emits specific events to enable off-chain monitoring and
 | `emg_appr`   | EmergencyApproved        | `approve_emergency_withdraw`                                                                   | Multi-sig emergency withdrawal approved           |
 | `emg_exec`   | EmergencyExecuted        | `execute_emergency_withdraw`                                                                   | Multi-sig emergency withdrawal executed           |
 
+### Event payload semantics
+
+- `set_cooperator` emits `coop_upd` with data tuple `(old_cooperator, new_cooperator)`.
+- `set_zkme_verifier` emits `zkme_upd` with topics `(symbol, caller)` and data `(old_verifier, new_verifier)`.
+- Both events are emitted after authorization and input validation, and are intended for compliance/audit indexers.
+
 ### Yield claiming examples
 
 #### Example: Claim all pending yield
@@ -900,6 +906,8 @@ Key invariants to verify:
 | `pending_yield`    | View       | None     | Assets | Unclaimed yield amount for a user.               |
 | `share_price`      | View       | None     | Assets | Current price of one share (scaled by decimals). |
 | `epoch_yield`      | View       | None     | Assets | Total yield distributed in a given epoch.        |
+| `current_epoch`    | View       | None     | Epochs | Current epoch counter for deterministic request tracking. |
+| `get_current_epoch`| View       | None     | Epochs | Alias for `current_epoch` for `get_*` SDK conventions. |
 
 #### Administration & Configuration
 
@@ -908,6 +916,9 @@ Key invariants to verify:
 | `activate_vault`    | Update     | Operator | —       | Transition `Funding → Active`.   |
 | `mature_vault`      | Update     | Operator | —       | Transition `Active → Matured`.   |
 | `set_maturity_date` | Update     | Operator | Seconds | Update the maturity timestamp.   |
+| `maturity_date`     | View       | None     | Seconds | Read vault maturity timestamp (Unix seconds). |
+| `get_maturity_date` | View       | None     | Seconds | Alias for `maturity_date` for `get_*` SDK conventions. |
+| `early_redemption_fee_bps` | View | None | BPS | Early redemption fee in basis points (10_000 = 100%), rounded down on fee calculations. |
 | `set_operator`      | Update     | Admin    | —       | Grant or revoke operator role.   |
 | `transfer_admin`    | Update     | Admin    | —       | Transfer primary admin role.     |
 | `pause / unpause`   | Update     | Operator | —       | Halt or resume vault operations. |
@@ -921,6 +932,7 @@ Key invariants to verify:
 | `batch_create_vaults`     | Update     | Operator | —     | Deploy multiple vaults in one TX (max 10).   |
 | `get_all_vaults`          | View       | None     | —     | List all registered vault addresses.         |
 | `get_vault_info`          | View       | None     | —     | Read metadata for a specific vault.          |
+| `is_registered_vault`     | View       | None     | Bool  | Returns true if a vault address exists in factory registry. |
 | `set_vault_status`        | Update     | Admin    | —     | Activate/deactivate a vault in the registry. |
 | `set_vault_wasm_hash`     | Update     | Admin    | —     | Update the WASM used for new deployments.    |
 | `version`                 | View       | None     | —     | Factory contract version.                    |

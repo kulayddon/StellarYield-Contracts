@@ -1426,6 +1426,10 @@ impl SingleRWAVault {
     pub fn current_epoch(e: &Env) -> u32 {
         get_current_epoch(e)
     }
+    /// Alias getter for integrations expecting `get_*` naming.
+    pub fn get_current_epoch(e: &Env) -> u32 {
+        get_current_epoch(e)
+    }
     pub fn epoch_yield(e: &Env, epoch: u32) -> i128 {
         get_epoch_yield(e, epoch)
     }
@@ -1775,6 +1779,10 @@ impl SingleRWAVault {
     /// - **Maturity Check**: Clients should compare this value with the current
     ///   ledger timestamp to determine if the term has ended.
     pub fn maturity_date(e: &Env) -> u64 {
+        get_maturity_date(e)
+    }
+    /// Alias getter for integrations expecting `get_*` naming.
+    pub fn get_maturity_date(e: &Env) -> u64 {
         get_maturity_date(e)
     }
 
