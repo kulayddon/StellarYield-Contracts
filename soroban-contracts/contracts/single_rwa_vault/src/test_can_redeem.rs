@@ -1,8 +1,7 @@
 #![cfg(test)]
 
 use crate::test_helpers::*;
-use crate::types::VaultState;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, String};
 
 #[test]
 fn test_can_redeem_success() {
